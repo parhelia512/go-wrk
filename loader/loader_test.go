@@ -87,3 +87,28 @@ func TestRunSingleLoadSession_ServerErrorsAccumulate(t *testing.T) {
 		t.Errorf("ErrMap[%q] = %d, NumErrs = %d", key, stats.ErrMap[key], stats.NumErrs)
 	}
 }
+
+func TestRunSingleLoadSession_Stop(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(ts.Close)
+
+	ch := make(chan *RequesterStats, 1)
+	cfg := NewLoadCfg(30, 1, ts.URL, "", "GET", "", nil, ch, 1000, true, false, false, false, "", "", "", false)
+
+	go cfg.RunSingleLoadSession()
+
+	time.Sleep(100 * time.Millisecond)
+	cfg.Stop()
+
+	select {
+	case stats := <-ch:
+		if stats == nil {
+			t.Fatal("stats == nil")
+		}
+		// Don't assert on counts — we just want to know we exited early.
+	case <-time.After(2 * time.Second):
+		t.Fatal("session did not exit within 2s after Stop()")
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/tsliwowicz/go-wrk/util"
@@ -79,5 +80,36 @@ func TestClient_SkipVerify(t *testing.T) {
 	}
 	if _, err := strict.Get(ts.URL); err == nil {
 		t.Fatal("strict client should fail on self-signed TLS cert")
+	}
+}
+
+func TestClient_MissingClientKey(t *testing.T) {
+	_, err := client(false, false, false, 1000, true, "cert.pem", "", "ca.pem", false)
+	if err == nil {
+		t.Fatal("want err for missing client key, got nil")
+	}
+	if !strings.Contains(err.Error(), "client key") {
+		t.Errorf("err = %q, want substring %q", err.Error(), "client key")
+	}
+}
+
+func TestClient_MissingClientCert(t *testing.T) {
+	_, err := client(false, false, false, 1000, true, "", "", "ca.pem", false)
+	if err == nil {
+		t.Fatal("want err for missing client cert, got nil")
+	}
+	if !strings.Contains(err.Error(), "client certificate") {
+		t.Errorf("err = %q, want substring %q", err.Error(), "client certificate")
+	}
+}
+
+func TestClient_BadCertFiles(t *testing.T) {
+	_, err := client(false, false, false, 1000, true,
+		"/nonexistent/cert.pem", "/nonexistent/key.pem", "/nonexistent/ca.pem", false)
+	if err == nil {
+		t.Fatal("want err for nonexistent cert files, got nil")
+	}
+	if !strings.Contains(err.Error(), "Unable to load cert") {
+		t.Errorf("err = %q, want substring %q", err.Error(), "Unable to load cert")
 	}
 }

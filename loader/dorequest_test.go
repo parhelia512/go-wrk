@@ -93,3 +93,74 @@ func TestDoRequest_QueryEscaping(t *testing.T) {
 		t.Fatalf("DoRequest err = %v", err)
 	}
 }
+
+func TestDoRequest_301RedirectBlocked(t *testing.T) {
+	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", "http://example.invalid/")
+		w.WriteHeader(http.StatusMovedPermanently)
+	})
+
+	// Default client: allowRedirects=false → CheckRedirect returns RedirectError.
+	c, err := client(false, false, false, 5000, false, "", "", "", false)
+	if err != nil {
+		t.Fatalf("client() err = %v", err)
+	}
+
+	respSize, dur, err := DoRequest(c, nil, "GET", "", ts.URL, "")
+	if err == nil {
+		t.Fatalf("want err for blocked redirect, got nil (respSize=%d dur=%v)", respSize, dur)
+	}
+	if respSize != 0 {
+		t.Errorf("respSize = %d, want 0", respSize)
+	}
+	if dur != 0 {
+		t.Errorf("dur = %v, want 0", dur)
+	}
+}
+
+// keepLastResponseClient returns an *http.Client that surfaces redirect responses
+// without following them, so DoRequest's 301/307 branch is reachable.
+func keepLastResponseClient() *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
+func TestDoRequest_301RedirectAsResponse(t *testing.T) {
+	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", "http://example.invalid/")
+		w.WriteHeader(http.StatusMovedPermanently)
+	})
+
+	respSize, dur, err := DoRequest(keepLastResponseClient(), nil, "GET", "", ts.URL, "")
+	if err != nil {
+		t.Fatalf("DoRequest err = %v", err)
+	}
+	if respSize <= 0 {
+		t.Errorf("respSize = %d, want > 0", respSize)
+	}
+	if dur <= 0 {
+		t.Errorf("dur = %v, want > 0", dur)
+	}
+}
+
+func TestDoRequest_307RedirectAsResponse(t *testing.T) {
+	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", "http://example.invalid/")
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	})
+
+	respSize, dur, err := DoRequest(keepLastResponseClient(), nil, "GET", "", ts.URL, "")
+	if err != nil {
+		t.Fatalf("DoRequest err = %v", err)
+	}
+	if respSize <= 0 {
+		t.Errorf("respSize = %d, want > 0", respSize)
+	}
+	if dur <= 0 {
+		t.Errorf("dur = %v, want > 0", dur)
+	}
+}

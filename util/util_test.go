@@ -1,6 +1,8 @@
 package util
 
 import (
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -81,4 +83,65 @@ func TestMinDuration(t *testing.T) {
 	if got := MinDuration(a, a); got != a {
 		t.Errorf("MinDuration(a,a) = %v, want %v", got, a)
 	}
+}
+
+func TestEstimateHttpHeadersSize(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		got := EstimateHttpHeadersSize(http.Header{})
+		want := int64(len("\r\n"))
+		if got != want {
+			t.Fatalf("empty headers size = %d, want %d", got, want)
+		}
+	})
+
+	t.Run("single_header_single_value", func(t *testing.T) {
+		h := http.Header{}
+		h.Add("X-Foo", "bar")
+		// per implementation: len(k) + len(": \r\n") + len(v) for each value, + trailing "\r\n"
+		want := int64(len("X-Foo") + len(": \r\n") + len("bar") + len("\r\n"))
+		if got := EstimateHttpHeadersSize(h); got != want {
+			t.Fatalf("size = %d, want %d", got, want)
+		}
+	})
+
+	t.Run("single_header_multi_value", func(t *testing.T) {
+		h := http.Header{}
+		h.Add("X-Foo", "a")
+		h.Add("X-Foo", "bb")
+		want := int64(len("X-Foo") + len(": \r\n") + len("a") + len("bb") + len("\r\n"))
+		if got := EstimateHttpHeadersSize(h); got != want {
+			t.Fatalf("size = %d, want %d", got, want)
+		}
+	})
+
+	t.Run("multiple_headers", func(t *testing.T) {
+		h := http.Header{}
+		h.Add("A", "1")
+		h.Add("BB", "22")
+		// Map iteration order doesn't matter — addition is commutative.
+		want := int64(
+			len("A") + len(": \r\n") + len("1") +
+				len("Bb") + len(": \r\n") + len("22") + // canonical form: "Bb"
+				len("\r\n"))
+		if got := EstimateHttpHeadersSize(h); got != want {
+			t.Fatalf("size = %d, want %d", got, want)
+		}
+	})
+}
+
+func TestRedirectError(t *testing.T) {
+	const msg = "no redirects please"
+	err := NewRedirectError(msg)
+	if err == nil {
+		t.Fatal("NewRedirectError returned nil")
+	}
+	if err.Error() != msg {
+		t.Errorf("err.Error() = %q, want %q", err.Error(), msg)
+	}
+
+	// Confirm it satisfies the error interface.
+	var _ error = err
+
+	// Avoid the unused import lint if strings becomes unused.
+	_ = strings.Repeat
 }

@@ -181,9 +181,15 @@ func TestDoRequest_Non2xxIsError(t *testing.T) {
 }
 
 func TestDoRequest_BadURL(t *testing.T) {
-	_, _, err := DoRequest(defaultTestClient(t), nil, "GET", "", "://broken", "")
+	respSize, dur, err := DoRequest(defaultTestClient(t), nil, "GET", "", "://broken", "")
 	if err == nil {
 		t.Fatal("want err for malformed URL, got nil")
+	}
+	if respSize != 0 {
+		t.Errorf("respSize = %d, want 0", respSize)
+	}
+	if dur != 0 {
+		t.Errorf("dur = %v, want 0", dur)
 	}
 }
 

@@ -1,6 +1,8 @@
 package loader
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -23,4 +25,29 @@ func TestEscapeUrlStr(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUnwrap(t *testing.T) {
+	inner := errors.New("inner")
+
+	t.Run("plain_error", func(t *testing.T) {
+		if got := unwrap(inner); got != inner {
+			t.Fatalf("unwrap(inner) = %v, want %v", got, inner)
+		}
+	})
+
+	t.Run("single_wrap", func(t *testing.T) {
+		wrapped := fmt.Errorf("outer: %w", inner)
+		if got := unwrap(wrapped); got != inner {
+			t.Fatalf("unwrap(wrapped) = %v, want %v", got, inner)
+		}
+	})
+
+	t.Run("double_wrap", func(t *testing.T) {
+		w1 := fmt.Errorf("mid: %w", inner)
+		w2 := fmt.Errorf("outer: %w", w1)
+		if got := unwrap(w2); got != inner {
+			t.Fatalf("unwrap(w2) = %v, want %v", got, inner)
+		}
+	})
 }

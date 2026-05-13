@@ -3,6 +3,7 @@ package loader
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -53,5 +54,36 @@ func TestRunSingleLoadSession_HappyPath(t *testing.T) {
 	}
 	if len(stats.ErrMap) != 0 {
 		t.Errorf("ErrMap not empty: %v", stats.ErrMap)
+	}
+}
+
+func TestRunSingleLoadSession_ServerErrorsAccumulate(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(ts.Close)
+
+	ch := make(chan *RequesterStats, 1)
+	cfg := NewLoadCfg(1, 1, ts.URL, "", "GET", "", nil, ch, 1000, true, false, false, false, "", "", "", false)
+
+	stats := runSession(t, cfg, ch)
+
+	if stats.NumRequests != 0 {
+		t.Errorf("NumRequests = %d, want 0", stats.NumRequests)
+	}
+	if stats.NumErrs == 0 {
+		t.Fatal("NumErrs = 0, want > 0")
+	}
+
+	var key string
+	for k := range stats.ErrMap {
+		key = k
+		break
+	}
+	if !strings.Contains(key, "status code 500") {
+		t.Errorf("ErrMap key = %q, want substring %q", key, "status code 500")
+	}
+	if stats.ErrMap[key] != stats.NumErrs {
+		t.Errorf("ErrMap[%q] = %d, NumErrs = %d", key, stats.ErrMap[key], stats.NumErrs)
 	}
 }

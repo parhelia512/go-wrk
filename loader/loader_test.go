@@ -112,3 +112,50 @@ func TestRunSingleLoadSession_Stop(t *testing.T) {
 		t.Fatal("session did not exit within 2s after Stop()")
 	}
 }
+
+func TestRunSingleLoadSession_BadURL(t *testing.T) {
+	ch := make(chan *RequesterStats, 1)
+	// Port 1 is rarely open; with a tight timeout we'll accumulate errors.
+	cfg := NewLoadCfg(1, 1, "http://127.0.0.1:1", "", "GET", "", nil, ch, 200, true, false, false, false, "", "", "", false)
+
+	stats := runSession(t, cfg, ch)
+
+	if stats.NumRequests != 0 {
+		t.Errorf("NumRequests = %d, want 0", stats.NumRequests)
+	}
+	if stats.NumErrs == 0 {
+		t.Fatal("NumErrs = 0, want > 0")
+	}
+	if len(stats.ErrMap) == 0 {
+		t.Fatal("ErrMap empty, want at least one entry")
+	}
+}
+
+func TestRunSingleLoadSession_BodyAndMethod(t *testing.T) {
+	gotPOST := make(chan struct{}, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			select {
+			case gotPOST <- struct{}{}:
+			default:
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(ts.Close)
+
+	ch := make(chan *RequesterStats, 1)
+	cfg := NewLoadCfg(1, 1, ts.URL, "hello", "POST", "", nil, ch, 1000, true, false, false, false, "", "", "", false)
+
+	stats := runSession(t, cfg, ch)
+
+	if stats.NumRequests == 0 {
+		t.Errorf("NumRequests = 0, want > 0")
+	}
+
+	select {
+	case <-gotPOST:
+	default:
+		t.Error("server never observed a POST request")
+	}
+}

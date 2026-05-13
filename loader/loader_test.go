@@ -1,6 +1,7 @@
 package loader
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -114,9 +115,18 @@ func TestRunSingleLoadSession_Stop(t *testing.T) {
 }
 
 func TestRunSingleLoadSession_BadURL(t *testing.T) {
+	// Grab a free port on loopback and close the listener immediately, so
+	// connections to that address are reliably refused for the test window.
+	// (Using a hardcoded port like 1 is technically OS-dependent.)
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen: %v", err)
+	}
+	addr := l.Addr().String()
+	_ = l.Close()
+
 	ch := make(chan *RequesterStats, 1)
-	// Port 1 is rarely open; with a tight timeout we'll accumulate errors.
-	cfg := NewLoadCfg(1, 1, "http://127.0.0.1:1", "", "GET", "", nil, ch, 200, true, false, false, false, "", "", "", false)
+	cfg := NewLoadCfg(1, 1, "http://"+addr, "", "GET", "", nil, ch, 200, true, false, false, false, "", "", "", false)
 
 	stats := runSession(t, cfg, ch)
 

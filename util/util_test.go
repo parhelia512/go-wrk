@@ -2,7 +2,6 @@ package util
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 )
@@ -119,9 +118,11 @@ func TestEstimateHttpHeadersSize(t *testing.T) {
 		h.Add("A", "1")
 		h.Add("BB", "22")
 		// Map iteration order doesn't matter — addition is commutative.
+		// http.Header.Add canonicalizes keys via textproto.CanonicalMIMEHeaderKey,
+		// so we must use the canonical form when computing expected size.
 		want := int64(
-			len("A") + len(": \r\n") + len("1") +
-				len("Bb") + len(": \r\n") + len("22") + // canonical form: "Bb"
+			len(http.CanonicalHeaderKey("A")) + len(": \r\n") + len("1") +
+				len(http.CanonicalHeaderKey("BB")) + len(": \r\n") + len("22") +
 				len("\r\n"))
 		if got := EstimateHttpHeadersSize(h); got != want {
 			t.Fatalf("size = %d, want %d", got, want)
@@ -141,7 +142,4 @@ func TestRedirectError(t *testing.T) {
 
 	// Confirm it satisfies the error interface.
 	var _ error = err
-
-	// Avoid the unused import lint if strings becomes unused.
-	_ = strings.Repeat
 }

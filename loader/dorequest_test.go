@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -162,5 +163,54 @@ func TestDoRequest_307RedirectAsResponse(t *testing.T) {
 	}
 	if dur <= 0 {
 		t.Errorf("dur = %v, want > 0", dur)
+	}
+}
+
+func TestDoRequest_Non2xxIsError(t *testing.T) {
+	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	_, _, err := DoRequest(defaultTestClient(t), nil, "GET", "", ts.URL, "")
+	if err == nil {
+		t.Fatal("want err for 500 response, got nil")
+	}
+	if !strings.Contains(err.Error(), "status code 500") {
+		t.Errorf("err = %q, want substring %q", err.Error(), "status code 500")
+	}
+}
+
+func TestDoRequest_BadURL(t *testing.T) {
+	_, _, err := DoRequest(defaultTestClient(t), nil, "GET", "", "://broken", "")
+	if err == nil {
+		t.Fatal("want err for malformed URL, got nil")
+	}
+}
+
+func TestDoRequest_ServerClosesEarly(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Errorf("ResponseWriter is not a Hijacker")
+			return
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Errorf("Hijack err = %v", err)
+			return
+		}
+		_ = conn.Close()
+	}))
+	t.Cleanup(ts.Close)
+
+	respSize, dur, err := DoRequest(defaultTestClient(t), nil, "GET", "", ts.URL, "")
+	if err == nil {
+		t.Fatal("want err for connection closed mid-response, got nil")
+	}
+	if respSize != 0 {
+		t.Errorf("respSize = %d, want 0", respSize)
+	}
+	if dur != 0 {
+		t.Errorf("dur = %v, want 0", dur)
 	}
 }

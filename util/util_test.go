@@ -2,6 +2,7 @@ package util
 
 import (
 	"testing"
+	"time"
 )
 
 func TestHeaderList_SetAndString(t *testing.T) {
@@ -49,5 +50,35 @@ func TestByteSizeString(t *testing.T) {
 				t.Fatalf("ByteSize{%v}.String() = %q, want %q", tc.size, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestMaxDuration(t *testing.T) {
+	a := 100 * time.Millisecond
+	b := 200 * time.Millisecond
+
+	if got := MaxDuration(a, b); got != b {
+		t.Errorf("MaxDuration(a,b) = %v, want %v", got, b)
+	}
+	if got := MaxDuration(b, a); got != b {
+		t.Errorf("MaxDuration(b,a) = %v, want %v", got, b)
+	}
+	if got := MaxDuration(a, a); got != a {
+		t.Errorf("MaxDuration(a,a) = %v, want %v", got, a)
+	}
+}
+
+func TestMinDuration(t *testing.T) {
+	a := 100 * time.Millisecond
+	b := 200 * time.Millisecond
+
+	if got := MinDuration(a, b); got != a {
+		t.Errorf("MinDuration(a,b) = %v, want %v", got, a)
+	}
+	if got := MinDuration(b, a); got != a {
+		t.Errorf("MinDuration(b,a) = %v, want %v", got, a)
+	}
+	if got := MinDuration(a, a); got != a {
+		t.Errorf("MinDuration(a,a) = %v, want %v", got, a)
 	}
 }
